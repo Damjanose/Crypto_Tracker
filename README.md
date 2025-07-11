@@ -46,7 +46,7 @@ A simple React Native app to track your favorite cryptocurrencies—view live pr
 
 1. **Clone the repo**
    ```sh
-   git clone https://github.com/yourusername/cryptotracker-pro.git
+   git clone git@github.com:Damjanose/Crypto_Tracker.git
    cd cryptotracker-pro
    ```  
 2. **Install dependencies**
