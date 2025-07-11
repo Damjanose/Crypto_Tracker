@@ -1,4 +1,3 @@
-// screens/CryptoListScreen.tsx
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,8 +19,8 @@ interface Crypto {
   id: string;
   name: string;
   symbol: string;
-  price: string; // formatted “$1234.56”
-  change24h: number; // percent, e.g. -2.34
+  price: string;
+  change24h: number;
   iconUri: string;
 }
 
@@ -35,7 +34,6 @@ export default function CryptoListScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ————— Load saved coin IDs on mount —————
   useEffect(() => {
     const readIds = async () => {
       try {
@@ -49,7 +47,6 @@ export default function CryptoListScreen() {
     readIds();
   }, []);
 
-  // ————— Reload coin IDs whenever screen gains focus —————
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -69,7 +66,6 @@ export default function CryptoListScreen() {
     }, [])
   );
 
-  // ————— Fetch market data when coinIds changes —————
   const fetchMarkets = useCallback(async () => {
     if (coinIds.length === 0) {
       setCoins([]);
@@ -116,7 +112,6 @@ export default function CryptoListScreen() {
     fetchMarkets();
   }, [fetchMarkets]);
 
-  // ————— Render —————
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>

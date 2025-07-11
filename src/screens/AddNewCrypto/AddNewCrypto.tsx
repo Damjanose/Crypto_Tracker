@@ -32,7 +32,6 @@ export default function AddNewCryptoScreen() {
     setLoading(true);
 
     try {
-      // 1) Hit CoinGecko's search endpoint
       const resp = await fetch(
         `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
           symLower
@@ -43,7 +42,6 @@ export default function AddNewCryptoScreen() {
         coins: Array<{ id: string; symbol: string; name: string }>;
       };
 
-      // 2) Try to find an exact symbol match, otherwise a name match
       const match =
         coins.find((c) => c.symbol.toLowerCase() === symLower) ||
         coins.find((c) => c.name.toLowerCase() === symLower);
@@ -52,7 +50,6 @@ export default function AddNewCryptoScreen() {
         throw new Error("No matching coin");
       }
 
-      // 3) Persist its CoinGecko ID
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       const list: string[] = raw ? JSON.parse(raw) : [];
 
@@ -85,7 +82,6 @@ export default function AddNewCryptoScreen() {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} hitSlop={50}>
           <View style={styles.inner}>
-            {/* Back */}
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => navigation.goBack()}
@@ -94,7 +90,6 @@ export default function AddNewCryptoScreen() {
               <Text style={styles.backText}> Back to list</Text>
             </TouchableOpacity>
 
-            {/* Form */}
             <View style={styles.formContainer}>
               <Text style={styles.title}>Add a Cryptocurrency</Text>
 
