@@ -26,7 +26,6 @@ export default function CryptoListScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCoin, setSelectedCoin] = useState<Crypto | null>(null);
 
-  // load once
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => raw && JSON.parse(raw))
@@ -34,7 +33,6 @@ export default function CryptoListScreen() {
       .catch((e) => console.warn("Failed to load IDs", e));
   }, []);
 
-  // reload on focus
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -121,7 +119,6 @@ export default function CryptoListScreen() {
 
   return (
     <>
-      {/* Header bar */}
       <SafeAreaView style={styles.headerSafe} />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -132,7 +129,6 @@ export default function CryptoListScreen() {
           />
         </View>
 
-        {/* List of coins */}
         <FlatList
           data={coins}
           keyExtractor={(c) => c.id}
@@ -149,11 +145,9 @@ export default function CryptoListScreen() {
           }
         />
 
-        {/* Remove confirmation modal */}
         <Modal
           visible={modalVisible}
           transparent
-          animationType="slide"
           onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
