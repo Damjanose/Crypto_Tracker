@@ -1,48 +1,46 @@
-// screens/AddNewCryptoScreen.tsx
-import React, { useEffect, useState } from "react";
+// screens/CryptoListScreen.tsx
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
+  Platform,
   SafeAreaView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 // @ts-ignore
 import { MESSARI_API_KEY } from "@env";
 
-const STORAGE_KEY = "userCryptos";
-
-interface Asset {
-  id: string; // we'll use the symbol as our key
+interface Crypto {
+  id: string;
   name: string;
   symbol: string;
-  price: number;
-  changePct: number;
+  price: string;
+  change: number;
+  iconUri: string;
 }
 
-export default function AddNewCryptoScreen() {
+const noImage = "../../assets/images/no_image.png";
+
+export default function CryptoListScreen() {
   const navigation = useNavigation();
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [coins, setCoins] = useState<Crypto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAssets();
-  }, []);
-
-  async function fetchAssets() {
+  const fetchCoins = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
       const res = await fetch(
-        "https://api.messari.io/metrics/v2/assets?hasDiligence=true&hasIntel=true&hasMarketData=true&hasNews=true&limit=10",
+        "https://api.messari.io/metrics/v2/assets/details?slugs=bitcoin%2Cethereum",
+
         {
           headers: {
             accept: "application/json",
@@ -50,138 +48,140 @@ export default function AddNewCryptoScreen() {
           },
         }
       );
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const { data } = await res.json();
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-
-      // The endpoint may nest the array under data or data.data
-      const rawList: any[] = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json.data?.data)
-        ? json.data.data
-        : [];
-
-      const list: Asset[] = rawList.map((a) => {
-        // asset metadata could live under `a.asset` or top-level
-        const assetInfo = a.asset ?? a;
-        const metrics = a.metrics ?? {};
-
-        const symbol: string = assetInfo.symbol;
-        const name: string = assetInfo.name;
-        const price: number = metrics.market_data?.price_usd ?? 0;
-        const changePct: number =
-          metrics.market_data?.percent_change_usd_last_24_hours ?? 0;
-
-        return {
-          id: symbol,
-          symbol,
-          name,
-          price,
-          changePct,
-        };
-      });
-
-      console.log(list);
-
-      setAssets(list);
-    } catch (err: any) {
-      console.error("Fetch assets failed", err);
-      setError("Could not load assets. Pull to retry.");
+      const list: Crypto[] = (data as any[]).map((a) => ({
+        id: a.symbol,
+        name: a.name,
+        symbol: a.symbol,
+        price: `$${a.marketData.price_usd}`,
+        change: a.returnOnInvestment.priceChange24h,
+        iconUri: a.profile ? a.profile.general.logoImage : noImage,
+      }));
+      setCoins(list);
+    } catch (e) {
+      console.error("Fetch assets failed", e);
+      setError("Unable to load data.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function onAdd(symbol: string) {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const list: string[] = raw ? JSON.parse(raw) : [];
-      if (list.includes(symbol)) {
-        Alert.alert("Already added", `${symbol} is already in your list.`);
-      } else {
-        await AsyncStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify([...list, symbol])
-        );
-        navigation.goBack();
-      }
-    } catch (err) {
-      console.error("Add failed", err);
-      Alert.alert("Error", "Could not save. Try again.");
-    }
-  }
-
-  const renderItem = ({ item }: { item: Asset }) => {
-    const up = item.changePct >= 0;
-    const iconUri = `https://cryptoicons.org/api/icon/${item.symbol.toLowerCase()}/200`;
-
-    return (
-      <TouchableOpacity style={styles.item} onPress={() => onAdd(item.symbol)}>
-        <View style={styles.left}>
-          <Image source={{ uri: iconUri }} style={styles.icon} />
-          <View>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.symbol}>{item.symbol}</Text>
-          </View>
-        </View>
-        <View style={styles.right}>
-          <Text style={styles.price}>${item.price.toFixed(2)}</Text>
-          <Text style={[styles.change, up ? styles.up : styles.down]}>
-            {up ? "↑" : "↓"} {Math.abs(item.changePct).toFixed(2)}%
-          </Text>
-          <Text style={styles.tapToAdd}>Tap to add</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  useEffect(() => {
+    fetchCoins();
+  }, [fetchCoins]);
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" style={{ marginTop: 50 }} />
       </SafeAreaView>
     );
   }
-
   if (error) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retry} onPress={fetchAssets}>
+        <TouchableOpacity
+          style={styles.retry}
+          onPress={() => {
+            fetchCoins();
+            Alert.alert("Retrying…");
+          }}
+        >
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Add a Cryptocurrency</Text>
+  const renderItem = ({ item }: { item: Crypto }) => {
+    const up = item.change >= 0;
+    return (
+      <View style={styles.item}>
+        <View style={styles.left}>
+          <Image source={{ uri: item.iconUri }} style={styles.icon} />
+          <View>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.symbol}>{item.symbol}</Text>
+          </View>
+        </View>
+        <View style={styles.right}>
+          <Text style={styles.price}>{item.price}</Text>
+          <Text style={[styles.change, up ? styles.up : styles.down]}>
+            {up ? "↑ " : "↓ "}
+            {Math.abs(item.change).toFixed(2)}%
+          </Text>
+        </View>
       </View>
+    );
+  };
 
-      <FlatList
-        data={assets}
-        keyExtractor={(i) => i.id}
-        renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.listContent}
-      />
-    </SafeAreaView>
+  return (
+    <>
+      <SafeAreaView style={styles.headerSafe} />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>CryptoTracker Pro</Text>
+          <Image
+            source={{ uri: "https://i.pravatar.cc/300" }}
+            style={styles.profile}
+          />
+        </View>
+
+        <FlatList
+          data={coins}
+          keyExtractor={(i) => i.id}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={styles.listContent}
+          ListFooterComponent={
+            <TouchableOpacity
+              style={styles.footer}
+              onPress={() => navigation.navigate("AddNewCrypto" as never)}
+            >
+              <Text style={styles.footerText}>+ Add a Cryptocurrency</Text>
+            </TouchableOpacity>
+          }
+        />
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#FFF" },
-
-  header: {
-    padding: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#EEE",
+  headerSafe: {
+    backgroundColor: "#355E8E",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
-  title: { fontSize: 22, fontWeight: "600", color: "#111" },
+  container: {
+    flex: 1,
+    backgroundColor: "#FFF",
+  },
+  header: {
+    backgroundColor: "#355E8E",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  title: { color: "#FFF", fontSize: 20, fontWeight: "700" },
+  profile: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
 
-  listContent: { paddingVertical: 8 },
+  listContent: { paddingVertical: 16 },
   item: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -190,7 +190,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   left: { flexDirection: "row", alignItems: "center" },
-  icon: { width: 32, height: 32, marginRight: 12 },
+  icon: {
+    width: 32,
+    height: 32,
+    marginRight: 12,
+  },
   name: { fontSize: 16, fontWeight: "600", color: "#111" },
   symbol: { fontSize: 12, color: "#666", marginTop: 2 },
 
@@ -199,12 +203,18 @@ const styles = StyleSheet.create({
   change: { fontSize: 12, marginTop: 4 },
   up: { color: "#34C759" },
   down: { color: "#FF3B30" },
-  tapToAdd: { fontSize: 10, color: "#355E8E", marginTop: 4 },
 
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#E0E0E0",
     marginLeft: 60,
+  },
+
+  footer: { marginTop: 32, marginBottom: 40, alignItems: "center" },
+  footerText: {
+    color: "#355E8E",
+    fontSize: 16,
+    fontWeight: "500",
   },
 
   errorText: {
@@ -214,7 +224,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   retry: {
-    marginTop: 12,
+    marginTop: 16,
     alignSelf: "center",
     paddingHorizontal: 20,
     paddingVertical: 8,
