@@ -1,3 +1,4 @@
+// screens/CryptoListScreen.tsx
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,65 +13,110 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-// @ts-ignore
-import { MESSARI_API_KEY } from "@env";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 interface Crypto {
   id: string;
   name: string;
   symbol: string;
-  price: string;
-  change: number;
+  price: string; // formatted “$1234.56”
+  change24h: number; // percent, e.g. -2.34
   iconUri: string;
 }
 
-const noImage = "../../assets/images/no_image.png";
+const NO_IMAGE = require("../../assets/images/no_image.png");
+const STORAGE_KEY = "userCryptos";
 
 export default function CryptoListScreen() {
   const navigation = useNavigation();
+  const [coinIds, setCoinIds] = useState<string[]>([]);
   const [coins, setCoins] = useState<Crypto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCoins = useCallback(async () => {
+  // ————— Load saved coin IDs on mount —————
+  useEffect(() => {
+    const readIds = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed: string[] = raw ? JSON.parse(raw) : [];
+        setCoinIds(parsed);
+      } catch (e) {
+        console.warn("Failed to load IDs", e);
+      }
+    };
+    readIds();
+  }, []);
+
+  // ————— Reload coin IDs whenever screen gains focus —————
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const readIds = async () => {
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEY);
+          const parsed: string[] = raw ? JSON.parse(raw) : [];
+          if (isActive) setCoinIds(parsed);
+        } catch (e) {
+          console.warn("Failed to reload IDs", e);
+        }
+      };
+      readIds();
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
+  // ————— Fetch market data when coinIds changes —————
+  const fetchMarkets = useCallback(async () => {
+    if (coinIds.length === 0) {
+      setCoins([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
-      const res = await fetch(
-        "https://api.messari.io/metrics/v2/assets/details?slugs=bitcoin%2Cethereum",
+      const url =
+        `https://api.coingecko.com/api/v3/coins/markets` +
+        `?vs_currency=usd` +
+        `&ids=${coinIds.join(",")}` +
+        `&order=market_cap_desc` +
+        `&per_page=100&page=1` +
+        `&sparkline=false` +
+        `&price_change_percentage=24h`;
 
-        {
-          headers: {
-            accept: "application/json",
-            "x-messari-api-key": MESSARI_API_KEY,
-          },
-        }
-      );
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`Status ${res.status}`);
-      const { data } = await res.json();
+      const data = await res.json();
 
-      const list: Crypto[] = (data as any[]).map((a) => ({
-        id: a.symbol,
-        name: a.name,
-        symbol: a.symbol,
-        price: `$${a.marketData.price_usd}`,
-        change: a.returnOnInvestment.priceChange24h,
-        iconUri: a.profile ? a.profile.general.logoImage : noImage,
+      const list: Crypto[] = data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        symbol: d.symbol.toUpperCase(),
+        price: `$${d.current_price.toFixed(2)}`,
+        change24h: d.price_change_percentage_24h ?? 0,
+        iconUri: d.image,
       }));
+
       setCoins(list);
     } catch (e) {
-      console.error("Fetch assets failed", e);
-      setError("Unable to load data.");
+      console.error("Fetch markets error", e);
+      setError("Unable to load prices.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [coinIds]);
 
   useEffect(() => {
-    fetchCoins();
-  }, [fetchCoins]);
+    fetchMarkets();
+  }, [fetchMarkets]);
 
+  // ————— Render —————
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -85,7 +131,7 @@ export default function CryptoListScreen() {
         <TouchableOpacity
           style={styles.retry}
           onPress={() => {
-            fetchCoins();
+            fetchMarkets();
             Alert.alert("Retrying…");
           }}
         >
@@ -96,11 +142,14 @@ export default function CryptoListScreen() {
   }
 
   const renderItem = ({ item }: { item: Crypto }) => {
-    const up = item.change >= 0;
+    const up = item.change24h >= 0;
     return (
       <View style={styles.item}>
         <View style={styles.left}>
-          <Image source={{ uri: item.iconUri }} style={styles.icon} />
+          <Image
+            source={item.iconUri ? { uri: item.iconUri } : NO_IMAGE}
+            style={styles.icon}
+          />
           <View>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.symbol}>{item.symbol}</Text>
@@ -110,7 +159,7 @@ export default function CryptoListScreen() {
           <Text style={styles.price}>{item.price}</Text>
           <Text style={[styles.change, up ? styles.up : styles.down]}>
             {up ? "↑ " : "↓ "}
-            {Math.abs(item.change).toFixed(2)}%
+            {Math.abs(item.change24h).toFixed(2)}%
           </Text>
         </View>
       </View>
@@ -131,7 +180,7 @@ export default function CryptoListScreen() {
 
         <FlatList
           data={coins}
-          keyExtractor={(i) => i.id}
+          keyExtractor={(c) => c.id}
           renderItem={renderItem}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.listContent}
@@ -179,7 +228,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFF",
   },
-
   listContent: { paddingVertical: 16 },
   item: {
     flexDirection: "row",
@@ -196,26 +244,22 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 16, fontWeight: "600", color: "#111" },
   symbol: { fontSize: 12, color: "#666", marginTop: 2 },
-
   right: { alignItems: "flex-end" },
   price: { fontSize: 16, fontWeight: "600", color: "#111" },
   change: { fontSize: 12, marginTop: 4 },
   up: { color: "#34C759" },
   down: { color: "#FF3B30" },
-
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#E0E0E0",
     marginLeft: 60,
   },
-
   footer: { marginTop: 32, marginBottom: 40, alignItems: "center" },
   footerText: {
     color: "#355E8E",
     fontSize: 16,
     fontWeight: "500",
   },
-
   errorText: {
     marginTop: 50,
     textAlign: "center",

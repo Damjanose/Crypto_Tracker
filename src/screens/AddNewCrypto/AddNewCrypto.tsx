@@ -16,8 +16,6 @@ import {
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-// @ts-ignore
-import { MESSARI_API_KEY } from "@env";
 
 const STORAGE_KEY = "userCryptos";
 
@@ -26,51 +24,52 @@ export default function AddNewCryptoScreen() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const sym = query.trim().toUpperCase();
-  const disabled = loading || !sym;
+  const symLower = query.trim().toLowerCase();
+  const disabled = loading || !symLower;
 
   const onAdd = async () => {
     if (disabled) return;
     setLoading(true);
 
     try {
-      // ✅ Correct Data API v1 domain:
-      const url = `https://data.messari.io/api/v1/assets/${sym.toLowerCase()}/metrics`;
-      const res = await fetch(url, {
-        headers: {
-          accept: "application/json",
-          "x-messari-api-key": MESSARI_API_KEY,
-        },
-      });
+      // 1) Hit CoinGecko's search endpoint
+      const resp = await fetch(
+        `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
+          symLower
+        )}`
+      );
+      if (!resp.ok) throw new Error(`Search failed (${resp.status})`);
+      const { coins } = (await resp.json()) as {
+        coins: Array<{ id: string; symbol: string; name: string }>;
+      };
 
-      if (!res.ok) {
-        // dump exact status & body for debugging
-        const text = await res.text();
-        console.warn(`Messari ${res.status}:`, text);
-        throw new Error(`Asset "${sym}" not found (status ${res.status})`);
+      // 2) Try to find an exact symbol match, otherwise a name match
+      const match =
+        coins.find((c) => c.symbol.toLowerCase() === symLower) ||
+        coins.find((c) => c.name.toLowerCase() === symLower);
+
+      if (!match) {
+        throw new Error("No matching coin");
       }
 
-      const json = await res.json();
-      if (!json.data?.metrics) {
-        console.warn("Unexpected response shape:", json);
-        throw new Error("Invalid response from Messari");
-      }
-
-      // persist to AsyncStorage
+      // 3) Persist its CoinGecko ID
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const list = raw ? (JSON.parse(raw) as string[]) : [];
+      const list: string[] = raw ? JSON.parse(raw) : [];
 
-      if (list.includes(sym)) {
-        Alert.alert("Already added", `${sym} is already in your list.`);
+      if (list.includes(match.id)) {
+        Alert.alert("Already added", `${match.name} is already in your list.`);
       } else {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...list, sym]));
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...list, match.id])
+        );
         navigation.goBack();
       }
-    } catch (err: any) {
-      console.error(err);
+    } catch (err) {
+      console.warn(err);
       Alert.alert(
         "Crypto not found",
-        `Could not find "${sym}". Please check the symbol and try again.`
+        `Could not find "${query.trim()}". Please check the symbol or name and try again.`
       );
     } finally {
       setLoading(false);
