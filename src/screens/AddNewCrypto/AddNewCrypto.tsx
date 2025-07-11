@@ -1,3 +1,4 @@
+// screens/AddNewCryptoScreen.tsx
 import React, { useState } from "react";
 import {
   Alert,
@@ -15,12 +16,14 @@ import {
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+// @ts-ignore
+import { MESSARI_API_KEY } from "@env";
 
 const STORAGE_KEY = "userCryptos";
 
 export default function AddNewCryptoScreen() {
   const navigation = useNavigation();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState("btc");
   const [loading, setLoading] = useState(false);
 
   const sym = query.trim().toUpperCase();
@@ -31,8 +34,15 @@ export default function AddNewCryptoScreen() {
     setLoading(true);
     try {
       const res = await fetch(
-        `https://data.messari.io/api/v1/assets/${sym.toLowerCase()}/metrics`
+        `https://data.messari.io/api/v1/assets/btc/metrics`,
+        {
+          headers: {
+            accept: "application/json",
+            "x-messari-api-key": MESSARI_API_KEY,
+          },
+        }
       );
+
       if (!res.ok) throw new Error("Not found");
 
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -77,6 +87,8 @@ export default function AddNewCryptoScreen() {
                 autoCapitalize="characters"
                 value={query}
                 onChangeText={setQuery}
+                returnKeyType="done"
+                onSubmitEditing={onAdd}
               />
 
               <TouchableOpacity
