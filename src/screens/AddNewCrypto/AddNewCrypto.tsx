@@ -1,6 +1,6 @@
-// screens/AddNewCryptoScreen.tsx
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
@@ -16,45 +16,58 @@ import {
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-// @ts-ignore
-import { MESSARI_API_KEY } from "@env";
 
 const STORAGE_KEY = "userCryptos";
 
 export default function AddNewCryptoScreen() {
   const navigation = useNavigation();
-  const [query, setQuery] = useState("btc");
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const sym = query.trim().toUpperCase();
-  const disabled = loading || !sym;
+  const symLower = query.trim().toLowerCase();
+  const disabled = loading || !symLower;
 
   const onAdd = async () => {
-    if (!sym) return;
+    if (disabled) return;
     setLoading(true);
-    try {
-      const res = await fetch(
-        `https://data.messari.io/api/v1/assets/btc/metrics`,
-        {
-          headers: {
-            accept: "application/json",
-            "x-messari-api-key": MESSARI_API_KEY,
-          },
-        }
-      );
 
-      if (!res.ok) throw new Error("Not found");
+    try {
+      const resp = await fetch(
+        `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
+          symLower
+        )}`
+      );
+      if (!resp.ok) throw new Error(`Search failed (${resp.status})`);
+      const { coins } = (await resp.json()) as {
+        coins: Array<{ id: string; symbol: string; name: string }>;
+      };
+
+      const match =
+        coins.find((c) => c.symbol.toLowerCase() === symLower) ||
+        coins.find((c) => c.name.toLowerCase() === symLower);
+
+      if (!match) {
+        throw new Error("No matching coin");
+      }
 
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       const list: string[] = raw ? JSON.parse(raw) : [];
-      if (list.includes(sym)) {
-        Alert.alert("Already added");
+
+      if (list.includes(match.id)) {
+        Alert.alert("Already added", `${match.name} is already in your list.`);
       } else {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...list, sym]));
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([...list, match.id])
+        );
         navigation.goBack();
       }
-    } catch {
-      Alert.alert("Crypto not found", "Please check the symbol and try again.");
+    } catch (err) {
+      console.warn(err);
+      Alert.alert(
+        "Crypto not found",
+        `Could not find "${query.trim()}". Please check the symbol or name and try again.`
+      );
     } finally {
       setLoading(false);
     }
@@ -96,11 +109,14 @@ export default function AddNewCryptoScreen() {
                 disabled={disabled}
                 onPress={onAdd}
               >
-                <Icon name="add" size={20} color="#000" />
-                <Text style={styles.addButtonText}>
-                  {" "}
-                  {loading ? "Adding…" : "Add"}
-                </Text>
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <>
+                    <Icon name="add" size={20} color="#000" />
+                    <Text style={styles.addButtonText}> Add</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -121,6 +137,7 @@ const styles = StyleSheet.create({
   },
   inner: {
     flex: 1,
+    justifyContent: "center",
   },
 
   backButton: {
