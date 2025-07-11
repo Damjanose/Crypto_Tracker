@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Button,
   FlatList,
   Image,
+  Modal,
   SafeAreaView,
   Text,
   TouchableOpacity,
@@ -13,7 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import { styles } from "./CryptoListScreen.styles";
-import {useCryptoMarkets} from "../../hooks/useCryptoMarkets";
+import { useCryptoMarkets } from "../../hooks/useCryptoMarkets";
 import { Crypto } from "../../services/cryptoService";
 
 const STORAGE_KEY = "userCryptos";
@@ -21,23 +23,27 @@ const STORAGE_KEY = "userCryptos";
 export default function CryptoListScreen() {
   const navigation = useNavigation();
   const [coinIds, setCoinIds] = useState<string[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedCoin, setSelectedCoin] = useState<Crypto | null>(null);
 
+  // load once
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
-      .then(raw => raw && JSON.parse(raw))
+      .then((raw) => raw && JSON.parse(raw))
       .then((ids: string[]) => setCoinIds(ids || []))
-      .catch(e => console.warn("Failed to load IDs", e));
+      .catch((e) => console.warn("Failed to load IDs", e));
   }, []);
 
+  // reload on focus
   useFocusEffect(
     useCallback(() => {
       let active = true;
       AsyncStorage.getItem(STORAGE_KEY)
-        .then(raw => raw && JSON.parse(raw))
+        .then((raw) => raw && JSON.parse(raw))
         .then((ids: string[]) => {
           if (active) setCoinIds(ids || []);
         })
-        .catch(e => console.warn("Failed to reload IDs", e));
+        .catch((e) => console.warn("Failed to reload IDs", e));
       return () => {
         active = false;
       };
@@ -45,6 +51,48 @@ export default function CryptoListScreen() {
   );
 
   const { coins, loading, error, reload } = useCryptoMarkets(coinIds);
+
+  const handleRemove = async () => {
+    if (!selectedCoin) return;
+    try {
+      const updated = coinIds.filter((id) => id !== selectedCoin.id);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      setCoinIds(updated);
+      setModalVisible(false);
+    } catch (e) {
+      console.warn("Failed to remove coin", e);
+      Alert.alert("Error", "Could not remove coin.");
+    }
+  };
+
+  const renderItem = ({ item }: { item: Crypto }) => {
+    const up = item.change24h >= 0;
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          setSelectedCoin(item);
+          setModalVisible(true);
+        }}
+      >
+        <View style={styles.item}>
+          <View style={styles.left}>
+            <Image source={{ uri: item.iconUri }} style={styles.icon} />
+            <View>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.symbol}>{item.symbol}</Text>
+            </View>
+          </View>
+          <View style={styles.right}>
+            <Text style={styles.price}>{item.price}</Text>
+            <Text style={[styles.change, up ? styles.up : styles.down]}>
+              {up ? "↑ " : "↓ "}
+              {Math.abs(item.change24h).toFixed(2)}%
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -71,33 +119,9 @@ export default function CryptoListScreen() {
     );
   }
 
-  const renderItem = ({ item }: { item: Crypto }) => {
-    const up = item.change24h >= 0;
-    return (
-      <View style={styles.item}>
-        <View style={styles.left}>
-          <Image
-            source={{ uri: item.iconUri }}
-            style={styles.icon}
-          />
-          <View>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.symbol}>{item.symbol}</Text>
-          </View>
-        </View>
-        <View style={styles.right}>
-          <Text style={styles.price}>{item.price}</Text>
-          <Text style={[styles.change, up ? styles.up : styles.down]}>
-            {up ? "↑ " : "↓ "}
-            {Math.abs(item.change24h).toFixed(2)}%
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
   return (
     <>
+      {/* Header bar */}
       <SafeAreaView style={styles.headerSafe} />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -108,9 +132,10 @@ export default function CryptoListScreen() {
           />
         </View>
 
+        {/* List of coins */}
         <FlatList
           data={coins}
-          keyExtractor={c => c.id}
+          keyExtractor={(c) => c.id}
           renderItem={renderItem}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.listContent}
@@ -119,12 +144,30 @@ export default function CryptoListScreen() {
               style={styles.footer}
               onPress={() => navigation.navigate("AddNewCrypto" as never)}
             >
-              <Text style={styles.footerText}>
-                + Add a Cryptocurrency
-              </Text>
+              <Text style={styles.footerText}>+ Add a Cryptocurrency</Text>
             </TouchableOpacity>
           }
         />
+
+        {/* Remove confirmation modal */}
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                Remove {selectedCoin ? selectedCoin.name : "this coin"}?
+              </Text>
+              <View style={styles.modalButtons}>
+                <Button title="Cancel" onPress={() => setModalVisible(false)} />
+                <Button title="Remove" onPress={handleRemove} />
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </>
   );
