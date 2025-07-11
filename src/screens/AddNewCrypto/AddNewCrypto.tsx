@@ -1,3 +1,5 @@
+// src/screens/AddNewCryptoScreen.tsx
+
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -15,7 +17,9 @@ import {
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { styles } from "./AddNewCrypto.styles.ts";
+
+import { styles } from "./AddNewCrypto.styles";
+import { CoinSearchResult, searchCoins } from "../../services/cryptoService";
 
 const STORAGE_KEY = "userCryptos";
 
@@ -32,24 +36,19 @@ export default function AddNewCryptoScreen() {
     setLoading(true);
 
     try {
-      const resp = await fetch(
-        `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(
-          symLower
-        )}`
-      );
-      if (!resp.ok) throw new Error(`Search failed (${resp.status})`);
-      const { coins } = (await resp.json()) as {
-        coins: Array<{ id: string; symbol: string; name: string }>;
-      };
+      // 1️⃣ Get search results
+      const results: CoinSearchResult[] = await searchCoins(symLower);
 
+      // 2️⃣ Find exact match on symbol or name
       const match =
-        coins.find((c) => c.symbol.toLowerCase() === symLower) ||
-        coins.find((c) => c.name.toLowerCase() === symLower);
+        results.find((c) => c.symbol.toLowerCase() === symLower) ||
+        results.find((c) => c.name.toLowerCase() === symLower);
 
       if (!match) {
         throw new Error("No matching coin");
       }
 
+      // 3️⃣ Persist to AsyncStorage
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       const list: string[] = raw ? JSON.parse(raw) : [];
 

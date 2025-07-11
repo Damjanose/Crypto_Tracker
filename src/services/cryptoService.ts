@@ -1,5 +1,3 @@
-// src/services/cryptoService.ts
-
 export interface Crypto {
   id: string;
   name: string;
@@ -9,21 +7,16 @@ export interface Crypto {
   iconUri: string;
 }
 
-const MAX_RETRIES = 3;
-
-// simple delay helper
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export interface CoinSearchResult {
+  id: string;
+  symbol: string;
+  name: string;
 }
 
-export async function fetchMarketData(
-  ids: string[],
-  retries = MAX_RETRIES
-): Promise<Crypto[]> {
+export async function fetchMarketData(ids: string[]): Promise<Crypto[]> {
   if (ids.length === 0) {
     return [];
   }
-
   const url =
     `https://api.coingecko.com/api/v3/coins/markets` +
     `?vs_currency=usd` +
@@ -34,23 +27,9 @@ export async function fetchMarketData(
     `&price_change_percentage=24h`;
 
   const res = await fetch(url);
-
-  // handle rate-limit
-  if (res.status === 429) {
-    if (retries > 0) {
-      // try to read Retry-After header, fallback to 1s
-      const ra = parseInt(res.headers.get("Retry-After") || "1", 10) * 1000;
-      console.warn(`Rate limited—retrying after ${ra}ms (${retries} left)`);
-      await delay(ra);
-      return fetchMarketData(ids, retries - 1);
-    }
-    throw new Error("Rate limit exceeded. Please try again in a moment.");
-  }
-
   if (!res.ok) {
     throw new Error(`CoinGecko responded with ${res.status}`);
   }
-
   const data = await res.json();
   return data.map((d: any) => ({
     id: d.id,
@@ -62,3 +41,18 @@ export async function fetchMarketData(
   }));
 }
 
+export async function searchCoins(query: string): Promise<CoinSearchResult[]> {
+  const q = encodeURIComponent(query.trim());
+  const url = `https://api.coingecko.com/api/v3/search?query=${q}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`CoinGecko search failed (${res.status})`);
+  }
+  const body = await res.json();
+  return body.coins.map((c: any) => ({
+    id: c.id,
+    symbol: c.symbol,
+    name: c.name,
+  }));
+}
