@@ -1,7 +1,12 @@
 # CryptoTracker Pro
 
-A simple React Native app to track your favorite cryptocurrencies—view live prices, 24 h % changes, add new coins, and remove existing ones. Built with:
+## Show list of selected Cryptos or delete from list
+![list.png](src/assets/images/list.png)
+## add new crypto
+![addNew.png](src/assets/images/addNew.png)
 
+
+A simple React Native app to track your favorite cryptocurrencies—view live prices, 24 h % changes, add new coins, and remove existing ones. Built with:
 - **React Native CLI** (no Expo)
 - **React Navigation** (Stack)
 - **TanStack React Query** for data fetching & caching
@@ -27,7 +32,7 @@ A simple React Native app to track your favorite cryptocurrencies—view live pr
 5. **Persistence**  
    Your list is stored in AsyncStorage and reloaded on each app launch or screen focus.
 
----
+---![screen1.png](../../../Pictures/screen1.png)
 
 ## 📦 Prerequisites
 
