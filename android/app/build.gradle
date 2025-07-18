@@ -77,9 +77,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.reactnativenewsapp"
+    namespace "com.damjano.cryptoTracker"
     defaultConfig {
-        applicationId "com.reactnativenewsapp"
+        applicationId "com.damjano.cryptoTracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
