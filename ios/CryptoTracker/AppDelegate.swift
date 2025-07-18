@@ -24,7 +24,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "Crypto_Tracker",
+      withModuleName: "Crypto Tracker",
       in: window,
       launchOptions: launchOptions
     )
